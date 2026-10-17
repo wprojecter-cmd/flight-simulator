@@ -13,3 +13,5 @@
 
 /* Keep Leaflet's basemap selector interactive inside the click-through weather panel. */
 .flight-view .weather #mini-map,.flight-view .weather #mini-map *{pointer-events:auto!important}.flight-view .weather #mini-map .leaflet-control-layers{max-width:145px;font-size:10px;background:rgba(10,20,29,.94);color:#e6f2f7;border:1px solid #8cf2d088;border-radius:7px}.flight-view .weather #mini-map .leaflet-control-layers-expanded{padding:6px 8px}.flight-view .weather #mini-map .leaflet-control-layers label{margin:3px 0;white-space:nowrap}.flight-view .weather #mini-map .leaflet-control-layers-toggle{width:30px;height:30px;background-size:18px}
+
+.cesium-token-create{position:absolute;z-index:7;right:15px;top:198px;border:1px solid #e5bd7a88;border-radius:10px;background:#201b14ee;color:#f3cf8b;padding:10px 13px;font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer}.cesium-token-create:hover{background:#3a2b17}.cesium-token-create:disabled{opacity:.65;cursor:wait}
