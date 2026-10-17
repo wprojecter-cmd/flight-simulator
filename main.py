@@ -12,7 +12,7 @@ from pymongo import ASCENDING
 
 ROOT=os.path.dirname(os.path.abspath(__file__))
 URI=os.getenv('MONGODB_URI',''); DBNAME=os.getenv('MONGODB_DB','flight_simulator')
-SECRET=os.getenv('SESSION_SECRET',''); WEATHER_KEY=os.getenv('OPENWEATHER_API_KEY','')
+SECRET=os.getenv('SESSION_SECRET',''); WEATHER_KEY=os.getenv('OPENWEATHER_API_KEY',''); CESIUM_ION_MANAGEMENT_TOKEN=os.getenv('CESIUM_ION_MANAGEMENT_TOKEN','').strip()
 app=FastAPI(title='Flight Simulator Online',version='0.1.0')
 app.mount('/static',StaticFiles(directory=os.path.join(ROOT,'static')),name='static')
 client=None; db=None; sockets=set(); live={}
@@ -95,6 +95,39 @@ async def me(authorization:Optional[str]=Header(default=None)):
 @app.post('/api/auth/logout')
 async def logout(authorization:Optional[str]=Header(default=None)):
     u,t=await get_user(authorization); await db.sessions.delete_one({'user_id':str(u['_id']),'token_hash':hashlib.sha256(t.encode()).hexdigest()}); return {'ok':True}
+@app.post('/api/cesium/token')
+async def create_cesium_token(authorization:Optional[str]=Header(default=None)):
+    u,_=await get_user(authorization)
+    uid=str(u['_id'])
+    profile=await db.profiles.find_one({'user_id':uid}) or {}
+    existing=profile.get('cesium_ion_token')
+    if existing:
+        return {'ok':True,'token':existing,'created':False}
+    if not CESIUM_ION_MANAGEMENT_TOKEN:
+        raise HTTPException(503,'Cesium token creation is not configured. Add CESIUM_ION_MANAGEMENT_TOKEN to Render environment variables. It must be a private ion token with tokens:write scope.')
+    app_url='https://flight-simulator-qmyx.onrender.com'
+    token_name=('FlightSim-'+''.join(ch for ch in str(u.get('username','Pilot')) if ch.isalnum() or ch in '-_'))[:48]+'-'+uid[-6:]
+    payload={'name':token_name,'scopes':['assets:read'],'allowedUrls':[app_url]}
+    try:
+        async with httpx.AsyncClient(timeout=15) as c:
+            response=await c.post('https://api.cesium.com/v2/tokens',headers={'Authorization':'Bearer '+CESIUM_ION_MANAGEMENT_TOKEN,'Accept':'application/json'},json=payload)
+    except httpx.HTTPError:
+        raise HTTPException(502,'Could not connect to Cesium ion. Please try again.')
+    if response.status_code not in (200,201):
+        print('Cesium token creation failed:',response.status_code,response.text[:500])
+        if response.status_code in (401,403):
+            raise HTTPException(502,'Cesium rejected the management token. Check that it is valid and has tokens:write scope.')
+        raise HTTPException(502,'Cesium ion could not create a token. Check the Render logs for the provider response.')
+    try:
+        result=response.json()
+    except ValueError:
+        raise HTTPException(502,'Cesium ion returned an unreadable response.')
+    issued=result.get('token')
+    if not isinstance(issued,str) or not issued:
+        print('Cesium token response missing token field:',str(result)[:500])
+        raise HTTPException(502,'Cesium ion response did not contain a token. Check Render logs.')
+    await db.profiles.update_one({'user_id':uid},{'$set':{'cesium_ion_token':issued,'cesium_ion_token_id':result.get('id'),'cesium_ion_token_created_at':now(),'updated_at':now()}},upsert=True)
+    return {'ok':True,'token':issued,'created':True}
 @app.put('/api/profile/aircraft')
 async def aircraft(data:AircraftChoice,authorization:Optional[str]=Header(default=None)):
     u,_=await get_user(authorization)
