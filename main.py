@@ -107,7 +107,7 @@ async def create_cesium_token(authorization:Optional[str]=Header(default=None)):
         raise HTTPException(503,'Cesium token creation is not configured. Add CESIUM_ION_MANAGEMENT_TOKEN to Render environment variables. It must be a private ion token with tokens:write scope.')
     app_url='https://flight-simulator-qmyx.onrender.com'
     token_name=('FlightSim-'+''.join(ch for ch in str(u.get('username','Pilot')) if ch.isalnum() or ch in '-_'))[:48]+'-'+uid[-6:]
-    payload={'name':token_name,'scopes':['assets:read'],'allowedUrls':[app_url]}
+    payload={'name':token_name,'scopes':['assets:read'],'assetIds':[1],'allowedUrls':[app_url]}
     try:
         async with httpx.AsyncClient(timeout=15) as c:
             response=await c.post('https://api.cesium.com/v2/tokens',headers={'Authorization':'Bearer '+CESIUM_ION_MANAGEMENT_TOKEN,'Accept':'application/json'},json=payload)
