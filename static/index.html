@@ -104,6 +104,7 @@
     <section id="flight" class="view hidden flight-view">
       <button class="back" data-view="home">← EXIT FLIGHT</button>
       <button id="terrain-token" class="terrain-token" type="button">ENABLE 3D TERRAIN</button>
+      <button id="camera-mode" class="camera-mode" type="button">CAMERA: DRAG TO ROTATE</button>
       <div class="flight-stats">
         <div>ALTITUDE<b id="altitude">1,000 FT</b></div>
         <div>AIRSPEED<b id="speed">120 KTS</b></div>
@@ -137,6 +138,8 @@
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
   <script>window.CESIUM_BASE_URL="https://cesium.com/downloads/cesiumjs/releases/1.125/Build/Cesium/";</script>
   <link rel="stylesheet" href="https://cesium.com/downloads/cesiumjs/releases/1.125/Build/Cesium/Widgets/widgets.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cesium.com/downloads/cesiumjs/releases/1.125/Build/Cesium/Cesium.js"></script>
   <script src="/static/app.js"></script>
 </body>
