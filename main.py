@@ -154,10 +154,22 @@ async def players(authorization:Optional[str]=Header(default=None)):
 @app.get('/api/weather')
 async def weather(lat:float,lon:float,authorization:Optional[str]=Header(default=None)):
     await get_user(authorization)
-    if not WEATHER_KEY: raise HTTPException(503,'Set OPENWEATHER_API_KEY in Render environment variables.')
-    async with httpx.AsyncClient(timeout=8) as c: r=await c.get('https://api.openweathermap.org/data/2.5/weather',params={'lat':lat,'lon':lon,'appid':WEATHER_KEY,'units':'metric'})
+    if not -90 <= lat <= 90 or not -180 <= lon <= 180: raise HTTPException(400,'Invalid coordinates.')
+    params={'latitude':lat,'longitude':lon,'current':'temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,rain,showers,snowfall,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m','hourly':'cloud_cover_low,cloud_cover_mid,cloud_cover_high','forecast_days':1,'timezone':'auto'}
+    async with httpx.AsyncClient(timeout=12) as c:
+        r=await c.get('https://api.open-meteo.com/v1/forecast',params=params)
     if r.status_code!=200: raise HTTPException(502,'Weather provider request failed.')
-    d=r.json(); return {'temperature_c':d.get('main',{}).get('temp'),'wind_speed_ms':d.get('wind',{}).get('speed'),'humidity':d.get('main',{}).get('humidity'),'description':(d.get('weather') or [{}])[0].get('description'),'clouds_percent':d.get('clouds',{}).get('all'),'visibility_m':d.get('visibility')}
+    d=r.json(); cur=d.get('current') or {}; hourly=d.get('hourly') or {}; times=hourly.get('time') or []
+    idx=0
+    if cur.get('time') and times:
+        idx=min(range(len(times)),key=lambda i:abs((times[i][:13])-(cur['time'][:13]))) if len(times)>0 else 0
+    def at(name):
+        values=hourly.get(name) or []
+        return values[idx] if idx<len(values) else None
+    code=cur.get('weather_code',0)
+    descriptions={0:'Clear',1:'Mainly clear',2:'Partly cloudy',3:'Overcast',45:'Fog',48:'Rime fog',51:'Light drizzle',53:'Drizzle',55:'Dense drizzle',61:'Light rain',63:'Rain',65:'Heavy rain',71:'Light snow',73:'Snow',75:'Heavy snow',80:'Rain showers',81:'Rain showers',82:'Heavy rain showers',95:'Thunderstorm',96:'Thunderstorm with hail',99:'Severe thunderstorm'}
+    return {'temperature_c':cur.get('temperature_2m'),'apparent_temperature_c':cur.get('apparent_temperature'),'wind_speed_ms':round((cur.get('wind_speed_10m') or 0)/3.6,1),'wind_direction_deg':cur.get('wind_direction_10m'),'humidity':cur.get('relative_humidity_2m'),'description':descriptions.get(code,'Variable conditions'),'weather_code':code,'clouds_percent':cur.get('cloud_cover',0),'cloud_low_percent':at('cloud_cover_low') or 0,'cloud_mid_percent':at('cloud_cover_mid') or 0,'cloud_high_percent':at('cloud_cover_high') or 0,'rain_mm':cur.get('rain',0) or cur.get('showers',0) or 0,'snowfall_cm':cur.get('snowfall',0) or 0,'precipitation_mm':cur.get('precipitation',0) or 0,'time':cur.get('time'),'source':'Open-Meteo'}
+
 @app.websocket('/ws/flight')
 async def ws_flight(ws:WebSocket):
     await ws.accept(); sockets.add(ws)
