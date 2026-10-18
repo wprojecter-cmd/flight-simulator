@@ -54,6 +54,7 @@
         <button class="tile" data-view="earth"><div class="art globe-art"><img src="https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg" alt="Earth"></div><small>02 / DISCOVERY</small><h2>Earth</h2><p>Find a destination anywhere on the planet.</p><b>EXPLORE EARTH ↗</b></button>
         <button class="tile" data-view="flight"><div class="art horizon">FL 320</div><small>03 / FLIGHT DECK</small><h2>Start flight</h2><p>Take the controls and head for the horizon.</p><b>ENTER COCKPIT ↗</b></button>
         <button class="tile" data-view="multiplayer"><div class="art network">◎</div><small>04 / MULTIPLAYER</small><h2>Multiplayer</h2><p>Check the skies and fly alongside other pilots.</p><b>JOIN NETWORK ↗</b></button>
+        <button class="tile atc-tile" data-view="atc"><div class="art atc-art"><span>◉</span><i></i></div><small>05 / AIR TRAFFIC CONTROL</small><h2>World radar</h2><p>Track live pilots, routes and flight telemetry.</p><b>OPEN ATC RADAR ↗</b></button>
       </div>
       <footer>FLIGHTSIM ONLINE © 2026 <span>BUILT FOR THE LOVE OF FLIGHT</span><span>VERSION 0.1.0</span></footer>
     </main>
@@ -123,6 +124,18 @@
         <p id="weather-text">Live weather will load at your current flight location.</p><div id="flight-weather" class="flight-weather"><b id="flight-temperature">--°C</b><span id="flight-weather-condition">Loading live weather…</span><small id="flight-weather-layers">Cloud layers: --</small></div>
         <p class="note">W/S pitch · A/D roll · Q/E yaw · R/F throttle</p><p class="note camera-hint">CAMERA: drag on the scene with left mouse button · scroll to zoom</p><p class="note terrain-hint">Loading public 3D elevation terrain; Cesium ion is the fallback.</p>
       </aside>
+    </section>
+
+
+    <section id="atc" class="view hidden atc-view">
+      <div class="atc-topbar"><button class="back" data-view="home">← MAIN MENU</button><div class="atc-brand"><span class="atc-led"></span> FLIGHTSIM <b>ATC</b><small>GLOBAL SURVEILLANCE NETWORK</small></div><div class="atc-clock" id="atc-clock">UTC --:--:--</div></div>
+      <div class="atc-heading"><div><small>WORLDWIDE AIR TRAFFIC CONTROL</small><h1>Global <em>radar.</em></h1><p>Live traffic from FlightSim Online pilots.</p></div><div class="atc-live"><span class="atc-led"></span> LIVE SYSTEM <b id="atc-count">0 AIRCRAFT</b></div></div>
+      <div class="atc-layout">
+        <div class="atc-radar-panel"><div class="atc-panel-head"><span>◉ SURVEILLANCE SCOPE</span><span id="atc-map-status">SCANNING</span></div><div id="atc-map"><div class="radar-sweep"></div><div class="radar-crosshair"></div><div class="radar-vignette"></div><div class="radar-empty" id="atc-map-empty">WAITING FOR TRANSPONDERS<br><small>Active flights appear here automatically</small></div></div><div class="atc-map-legend"><span><i class="legend-live"></i> ACTIVE FLIGHT</span><span><i class="legend-route"></i> PLANNED ROUTE</span><span><i class="legend-track"></i> ACTUAL TRACK</span></div></div>
+        <aside class="atc-sidebar"><div class="atc-panel-head"><span>ACTIVE TRANSPONDERS</span><span id="atc-refresh-label">3 SEC UPDATE</span></div><div id="atc-flight-list" class="atc-flight-list"><div class="atc-no-flights">CONNECTING TO NETWORK…</div></div><div class="atc-selected" id="atc-selected"><div class="atc-selected-kicker">SELECTED FLIGHT</div><h2 id="atc-selected-name">No aircraft selected</h2><p id="atc-selected-route">Choose a target on the radar or list.</p><div class="atc-metrics"><div><small>ALTITUDE</small><b id="atc-alt">—</b></div><div><small>GROUND SPEED</small><b id="atc-speed">—</b></div><div><small>HEADING</small><b id="atc-heading-value">—</b></div><div><small>POSITION</small><b id="atc-position">—</b></div></div><button id="atc-watch" class="atc-watch" disabled>▶ WATCH LIVE FLIGHT</button></div></aside>
+      </div>
+      <div class="atc-live-view hidden" id="atc-live-view"><div class="atc-live-head"><div><span class="atc-led"></span> LIVE EXTERNAL VIEW <b id="atc-live-title">Flight observer</b></div><button id="atc-close-watch">CLOSE OBSERVER ✕</button></div><div id="atc-cesium"></div><div class="atc-live-hud"><span id="atc-live-alt">ALT —</span><span id="atc-live-speed">GS —</span><span id="atc-live-hdg">HDG —</span><span id="atc-live-coords">POS —</span></div></div>
+      <footer class="atc-footer">FLIGHTSIM ONLINE · ATC RADAR <span>DATA FROM ACTIVE GAME SESSIONS · POSITIONS REFRESH EVERY 3 SECONDS</span></footer>
     </section>
 
     <section id="multiplayer" class="view hidden">
