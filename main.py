@@ -156,10 +156,18 @@ async def weather(lat:float,lon:float,authorization:Optional[str]=Header(default
     await get_user(authorization)
     if not -90 <= lat <= 90 or not -180 <= lon <= 180: raise HTTPException(400,'Invalid coordinates.')
     params={'latitude':lat,'longitude':lon,'current':'temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,rain,showers,snowfall,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m','hourly':'cloud_cover_low,cloud_cover_mid,cloud_cover_high','forecast_days':1,'timezone':'auto'}
-    async with httpx.AsyncClient(timeout=12) as c:
+    async with httpx.AsyncClient(timeout=18) as c:
         r=await c.get('https://api.open-meteo.com/v1/forecast',params=params)
-    if r.status_code!=200: raise HTTPException(502,'Weather provider request failed.')
-    d=r.json(); cur=d.get('current') or {}; hourly=d.get('hourly') or {}; times=hourly.get('time') or []
+        if r.status_code!=200:
+            print('Open-Meteo detailed weather request failed:',r.status_code,r.text[:300])
+            fallback_params={'latitude':lat,'longitude':lon,'current':'temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,rain,showers,snowfall,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m','hourly':'cloud_cover_low,cloud_cover_mid,cloud_cover_high','forecast_days':1,'timezone':'auto','models':'best_match'}
+            r=await c.get('https://api.open-meteo.com/v1/forecast',params=fallback_params)
+    if r.status_code!=200:
+        print('Open-Meteo weather fallback failed:',r.status_code,r.text[:500])
+        raise HTTPException(502,'Weather provider is temporarily unavailable. Please retry in a moment.')
+    try: d=r.json()
+    except ValueError: raise HTTPException(502,'Weather provider returned invalid data.')
+    cur=d.get('current') or {}; hourly=d.get('hourly') or {}; times=hourly.get('time') or []
     idx=0
     if cur.get('time') and times:
         idx=min(range(len(times)),key=lambda i:abs((times[i][:13])-(cur['time'][:13]))) if len(times)>0 else 0
