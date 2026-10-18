@@ -56,7 +56,14 @@ class AircraftChoice(BaseModel): aircraft_id: str
 class Position(BaseModel):
     lat: float=Field(ge=-90,le=90); lon: float=Field(ge=-180,le=180)
     altitude: float=Field(default=1000,ge=0,le=60000); heading: float=Field(default=0,ge=0,le=360)
+    speed: float=Field(default=120,ge=0,le=1500)
     aircraft_id: str='airbus-a320'
+    origin_lat: Optional[float]=Field(default=None,ge=-90,le=90)
+    origin_lon: Optional[float]=Field(default=None,ge=-180,le=180)
+    origin_name: Optional[str]=None
+    destination_lat: Optional[float]=Field(default=None,ge=-90,le=90)
+    destination_lon: Optional[float]=Field(default=None,ge=-180,le=180)
+    destination_name: Optional[str]=None
 async def get_user(auth):
     need_db()
     if not auth or not auth.lower().startswith('bearer '): raise HTTPException(401,'Please sign in.')
@@ -142,8 +149,19 @@ async def broadcast():
     for ws in stale: sockets.discard(ws)
 @app.post('/api/flight/position')
 async def position(data:Position,authorization:Optional[str]=Header(default=None)):
-    u,_=await get_user(authorization); uid=str(u['_id']); doc={'user_id':uid,'username':u['username'],**data.model_dump(),'updated_at':now()}
-    await db.flight_positions.update_one({'user_id':uid},{'$set':doc},upsert=True); live[uid]={**doc,'updated_at':doc['updated_at'].isoformat()}; await broadcast(); return {'ok':True}
+    u,_=await get_user(authorization); uid=str(u['_id']); stamp=now(); point={'lat':data.lat,'lon':data.lon,'altitude':data.altitude,'heading':data.heading,'speed':data.speed,'at':stamp.isoformat()}
+    doc={'user_id':uid,'username':u['username'],**data.model_dump(),'updated_at':stamp}
+    await db.flight_positions.update_one({'user_id':uid},{'$set':doc,'$push':{'track':{'$each':[point],'$slice':-1200}}},upsert=True)
+    live[uid]={**doc,'track':(live.get(uid,{}).get('track',[])+[point])[-1200:],'updated_at':stamp.isoformat()}; await broadcast(); return {'ok':True}
+@app.get('/api/atc/flights')
+async def atc_flights(authorization:Optional[str]=Header(default=None)):
+    await get_user(authorization)
+    cur=db.flight_positions.find({'updated_at':{'$gt':now()-timedelta(seconds=30)}},{'_id':0})
+    out=[]
+    async for p in cur:
+        if p.get('updated_at'): p['updated_at']=p['updated_at'].isoformat()
+        out.append(p)
+    return {'flights':out,'server_time':now().isoformat()}
 @app.get('/api/flight/players')
 async def players(authorization:Optional[str]=Header(default=None)):
     await get_user(authorization); cur=db.flight_positions.find({'updated_at':{'$gt':now()-timedelta(seconds=30)}},{'_id':0}); out=[]
