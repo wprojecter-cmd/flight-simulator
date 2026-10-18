@@ -42,7 +42,7 @@ async def shutdown():
 @app.get('/')
 async def home(): return FileResponse(os.path.join(ROOT,'static','index.html'))
 @app.get('/atc')
-async def atc_page(): return FileResponse(os.path.join(ROOT,'static','index.html'))
+async def atc_page(): return FileResponse(os.path.join(ROOT,'static','atc.html'))
 @app.get('/api/health')
 async def health():
     state='not_configured'
