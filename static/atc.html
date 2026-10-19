@@ -13,7 +13,7 @@
 <header class="top"><div class="brand">FLIGHTSIM <span style="color:#d6ff73">// WORLD ATC</span><small>GLOBAL SURVEILLANCE NETWORK · LIVE TRACKING</small></div><div><span class="led"></span><span class="status" id="connection">INITIALIZING</span></div><button id="back">← В игру</button></header>
 <main class="wrap">
 <div class="metrics"><div class="metric"><label>ONLINE FLIGHTS</label><strong id="m-flights">—</strong></div><div class="metric"><label>SELECTED AIRCRAFT</label><strong id="m-aircraft">—</strong></div><div class="metric"><label>ALTITUDE · FT</label><strong id="m-alt">—</strong></div><div class="metric"><label>GROUND SPEED · KT</label><strong id="m-speed">—</strong></div></div>
-<div class="layout"><section class="panel map-panel"><div class="panel-head"><span>◎ GLOBAL RADAR / LIVE POSITIONS</span><span style="display:flex;align-items:center;gap:8px"><button id="map-mode-toggle" type="button" onclick="toggleRadarMode()">🌐 ГЛОБУС</button><span id="clock">UTC --:--:--</span></span></div><div class="map-shell"><div id="map"></div><div class="scan"></div><div class="sweep"></div><div class="map-label">● SURVEILLANCE ACTIVE &nbsp; / &nbsp; DATA REFRESH 3 SEC</div></div></section>
+<div class="layout"><section class="panel map-panel"><div class="panel-head"><span>◎ GLOBAL RADAR / LIVE POSITIONS</span><span style="display:flex;align-items:center;gap:8px"><button id="map-mode-toggle" type="button" >🌐 ГЛОБУС</button><span id="clock">UTC --:--:--</span></span></div><div class="map-shell"><div id="map"></div><div class="scan"></div><div class="sweep"></div><div class="map-label">● SURVEILLANCE ACTIVE &nbsp; / &nbsp; DATA REFRESH 3 SEC</div></div></section>
 <aside class="side"><section class="panel"><div class="panel-head"><span>ACTIVE TRAFFIC</span><span id="flight-count">00</span></div><div class="list" id="flights"><div class="empty">Подключаемся к сети ATC…</div></div></section>
 <section class="panel"><div class="panel-head"><span>FLIGHT DATA</span><span id="callsign">NO SELECTION</span></div><div class="details"><div class="detail"><label>PILOT</label><strong id="d-pilot">—</strong></div><div class="detail"><label>AIRCRAFT</label><strong id="d-aircraft">—</strong></div><div class="detail"><label>ALTITUDE</label><strong id="d-alt">—</strong></div><div class="detail"><label>SPEED</label><strong id="d-speed">—</strong></div><div class="detail"><label>HEADING</label><strong id="d-heading">—</strong></div><div class="detail"><label>POSITION</label><strong id="d-position">—</strong></div><div class="detail"><label>DEPARTURE</label><strong id="d-origin">—</strong></div><div class="detail"><label>DESTINATION</label><strong id="d-dest">—</strong></div></div><div class="actions"><button id="watch" disabled>▶ LIVE OBSERVER</button><button id="center" disabled>◎ CENTER RADAR</button></div></section></aside></div>
 </main>
@@ -43,10 +43,11 @@ function toggleRadarMode(){
   map.camera.flyTo({destination:Cesium.Cartesian3.fromDegrees(destination?num(destination.lon):0,destination?num(destination.lat):15, destination?Math.max(150000,num(destination.altitude)*10):12000000),duration:1.1});
  }else{
   map.scene.morphTo3D(1.0);
-  map.camera.flyTo({destination,duration:1.1});
+  map.camera.flyTo({destination:position,duration:1.1});
  }
 }
-function coords(f){return [num(f.lat),num(f.lon)]}
+window.toggleRadarMode=toggleRadarMode;
+function coords(f){return [num(f.lat),num(f.lon)]
 function refreshMarkers(){
  const seen=new Set();
  for(const f of flights){
