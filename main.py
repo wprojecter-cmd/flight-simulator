@@ -41,6 +41,9 @@ async def shutdown():
     if client: client.close()
 @app.get('/')
 async def home(): return FileResponse(os.path.join(ROOT,'static','index.html'))
+@app.get('/api/atc/cesium-token')
+async def atc_cesium_token():
+    return {'token': os.getenv('CESIUM_ION_TOKEN', '').strip()}
 @app.get('/atc')
 async def atc_page(): return FileResponse(os.path.join(ROOT,'static','atc.html'))
 @app.get('/api/health')
