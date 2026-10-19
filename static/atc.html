@@ -30,8 +30,43 @@ function fmt(v,d=0){return num(v).toLocaleString('en-US',{maximumFractionDigits:
 function aircraftName(id){return ({'airbus-a320':'Airbus A320','boeing-747':'Boeing 747','airbus-a380':'Airbus A380','cessna-172':'Cessna 172','business-jet':'Business Jet'})[id]||id||'Unknown aircraft'}
 async function initMap(){const cfg=await fetch('/api/atc/cesium-token').then(r=>r.ok?r.json():({token:''})).catch(()=>({token:''}));if(cfg.token)Cesium.Ion.defaultAccessToken=cfg.token;map=new Cesium.Viewer('map',{animation:false,timeline:false,geocoder:false,homeButton:false,sceneModePicker:false,baseLayerPicker:false,baseLayer:false,navigationHelpButton:false,infoBox:false,selectionIndicator:false,shouldAnimate:true,terrainProvider:new Cesium.EllipsoidTerrainProvider()});map.imageryLayers.removeAll();try{if(cfg.token){map.terrainProvider=await Cesium.CesiumTerrainProvider.fromIonAssetId(1,{requestVertexNormals:true,requestWaterMask:true});map.imageryLayers.addImageryProvider(await Cesium.IonImageryProvider.fromAssetId(2))}else{map.imageryLayers.addImageryProvider(await Cesium.ArcGisMapServerImageryProvider.fromUrl('https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer'));try{map.terrainProvider=await Cesium.ArcGISTiledElevationTerrainProvider.fromUrl('https://elevation3d.arcgis.com/arcgis/rest/services/WorldElevation3D/Terrain3D/ImageServer')}catch(e){console.warn('Terrain fallback unavailable',e)}}}catch(e){console.error('ATC Cesium layers failed',e);map.imageryLayers.addImageryProvider(await Cesium.ArcGisMapServerImageryProvider.fromUrl('https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer'))}map.scene.globe.enableLighting=true;map.camera.setView({destination:Cesium.Cartesian3.fromDegrees(0,15,22000000)});}
 function coords(f){return [num(f.lat),num(f.lon)]}
-function refreshMarkers(){const seen=new Set();for(const f of flights){const id=f.user_id;if(!id||!Number.isFinite(Number(f.lat))||!Number.isFinite(Number(f.lon)))continue;seen.add(id);const pos=Cesium.Cartesian3.fromDegrees(num(f.lon),num(f.lat),Math.max(0,num(f.altitude)));let ent=markers.get(id);if(!ent){ent=map.entities.add({position:pos,point:{pixelSize:10,color:Cesium.Color.LIME,outlineColor:Cesium.Color.BLACK,outlineWidth:2},label:{text:aircraftName(f.aircraft_id)+' · '+(f.username||'Pilot'),font:'12px monospace',fillColor:Cesium.Color.LIME,showBackground:true,backgroundColor:Cesium.Color.BLACK.withAlpha(.75),pixelOffset:new Cesium.Cartesian2(0,-20)}});ent._flightUserId=id;markers.set(id,ent)}else{ent.position=pos;ent.label.text=aircraftName(f.aircraft_id)+' · '+(f.username||'Pilot')}const track=(f.track||[]).map(p=>Cesium.Cartesian3.fromDegrees(num(p.lon),num(p.lat),Math.max(0,num(p.altitude))));const routeId='atc-route-'+id,trackId='atc-track-'+id;map.entities.removeById(routeId);map.entities.removeById(trackId);if(f.origin_lat!=null&&f.destination_lat!=null){map.entities.add({id:routeId,polyline:{positions:[Cesium.Cartesian3.fromDegrees(num(f.origin_lon),num(f.origin_lat),1000),Cesium.Cartesian3.fromDegrees(num(f.destination_lon),num(f.destination_lat),1000)],width:2,material:Cesium.Color.fromCssColorString('#d6ff73').withAlpha(.7),arcType:Cesium.ArcType.GEODESIC}});routes.set(id,{routeId,trackId})}if(track.length>1)map.entities.add({id:trackId,polyline:{positions:track,width:3,material:Cesium.Color.LIME,arcType:Cesium.ArcType.NONE}})}}
-for(const [id,ent] of markers)if(!seen.has(id)){map.entities.remove(ent);markers.delete(id);map.entities.removeById('atc-route-'+id);map.entities.removeById('atc-track-'+id);routes.delete(id)}$('m-flights').textContent=flights.length;$('flight-count').textContent=String(flights.length).padStart(2,'0');$('connection').textContent='LIVE · CONNECTED';if(selected&&!flights.some(f=>f.user_id===selected)){selected=null;renderDetails()}if(selected){const f=flights.find(x=>x.user_id===selected);if(f)renderDetails(f)}}
+function refreshMarkers(){
+ const seen=new Set();
+ for(const f of flights){
+  const id=f.user_id;
+  if(!id||!Number.isFinite(Number(f.lat))||!Number.isFinite(Number(f.lon)))continue;
+  seen.add(id);
+  const pos=Cesium.Cartesian3.fromDegrees(num(f.lon),num(f.lat),Math.max(0,num(f.altitude)));
+  let ent=markers.get(id);
+  if(!ent){
+   ent=map.entities.add({position:pos,point:{pixelSize:10,color:Cesium.Color.LIME,outlineColor:Cesium.Color.BLACK,outlineWidth:2},label:{text:aircraftName(f.aircraft_id)+' · '+(f.username||'Pilot'),font:'12px monospace',fillColor:Cesium.Color.LIME,showBackground:true,backgroundColor:Cesium.Color.BLACK.withAlpha(.75),pixelOffset:new Cesium.Cartesian2(0,-20)}});
+   markers.set(id,ent);
+  }else{
+   ent.position=pos;
+   ent.label.text=aircraftName(f.aircraft_id)+' · '+(f.username||'Pilot');
+  }
+  const track=(f.track||[]).map(p=>Cesium.Cartesian3.fromDegrees(num(p.lon),num(p.lat),Math.max(0,num(p.altitude))));
+  const routeId='atc-route-'+id,trackId='atc-track-'+id;
+  map.entities.removeById(routeId);map.entities.removeById(trackId);
+  if(f.origin_lat!=null&&f.destination_lat!=null){
+   map.entities.add({id:routeId,polyline:{positions:[Cesium.Cartesian3.fromDegrees(num(f.origin_lon),num(f.origin_lat),1000),Cesium.Cartesian3.fromDegrees(num(f.destination_lon),num(f.destination_lat),1000)],width:2,material:Cesium.Color.fromCssColorString('#d6ff73').withAlpha(.7),arcType:Cesium.ArcType.GEODESIC}});
+  }
+  if(track.length>1){
+   map.entities.add({id:trackId,polyline:{positions:track,width:3,material:Cesium.Color.LIME,arcType:Cesium.ArcType.NONE}});
+  }
+ }
+ for(const [id,ent] of markers){
+  if(!seen.has(id)){
+   map.entities.remove(ent);markers.delete(id);
+   map.entities.removeById('atc-route-'+id);map.entities.removeById('atc-track-'+id);routes.delete(id);
+  }
+ }
+ $('m-flights').textContent=flights.length;
+ $('flight-count').textContent=String(flights.length).padStart(2,'0');
+ $('connection').textContent='LIVE · CONNECTED';
+ if(selected&&!flights.some(f=>f.user_id===selected)){selected=null;renderDetails();}
+ if(selected){const f=flights.find(x=>x.user_id===selected);if(f)renderDetails(f);}
+}
 function escapeHtml(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function renderList(){const el=$('flights');if(!flights.length){el.innerHTML='<div class="empty">Нет активных полётов.<br>Откройте Flight в другой вкладке и начните полёт.</div>';return}el.innerHTML=flights.map(f=>'<button class="flight '+(selected===f.user_id?'active':'')+'" data-id="'+escapeHtml(f.user_id)+'"><b>✈ '+escapeHtml(f.username||'Pilot')+' · '+escapeHtml(aircraftName(f.aircraft_id))+'</b><span>ALT '+fmt(f.altitude)+' m &nbsp; / &nbsp; SPD '+fmt(f.speed)+' kt &nbsp; / &nbsp; HDG '+fmt(f.heading)+'°</span></button>').join('');el.querySelectorAll('[data-id]').forEach(b=>b.addEventListener('click',()=>select(b.dataset.id)))}
 function renderDetails(f){$('m-aircraft').textContent=f?aircraftName(f.aircraft_id):'—';$('m-alt').textContent=f?fmt(num(f.altitude)*3.28084):'—';$('m-speed').textContent=f?fmt(f.speed):'—';$('callsign').textContent=f?String(f.username||'PILOT').toUpperCase():'NO SELECTION';$('d-pilot').textContent=f?.username||'—';$('d-aircraft').textContent=f?aircraftName(f.aircraft_id):'—';$('d-alt').textContent=f?fmt(f.altitude)+' m / '+fmt(num(f.altitude)*3.28084)+' ft':'—';$('d-speed').textContent=f?fmt(f.speed)+' kt':'—';$('d-heading').textContent=f?fmt(f.heading)+'°':'—';$('d-position').textContent=f?num(f.lat).toFixed(3)+', '+num(f.lon).toFixed(3):'—';$('d-origin').textContent=f?(f.origin_name|| (f.origin_lat!=null?num(f.origin_lat).toFixed(2)+', '+num(f.origin_lon).toFixed(2):'Not set')):'—';$('d-dest').textContent=f?(f.destination_name||(f.destination_lat!=null?num(f.destination_lat).toFixed(2)+', '+num(f.destination_lon).toFixed(2):'Not set')):'—';$('watch').disabled=!f;$('center').disabled=!f}
