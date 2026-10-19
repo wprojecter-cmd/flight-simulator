@@ -13,7 +13,7 @@
 <header class="top"><div class="brand">FLIGHTSIM <span style="color:#d6ff73">// WORLD ATC</span><small>GLOBAL SURVEILLANCE NETWORK · LIVE TRACKING</small></div><div><span class="led"></span><span class="status" id="connection">INITIALIZING</span></div><button id="back">← В игру</button></header>
 <main class="wrap">
 <div class="metrics"><div class="metric"><label>ONLINE FLIGHTS</label><strong id="m-flights">—</strong></div><div class="metric"><label>SELECTED AIRCRAFT</label><strong id="m-aircraft">—</strong></div><div class="metric"><label>ALTITUDE · FT</label><strong id="m-alt">—</strong></div><div class="metric"><label>GROUND SPEED · KT</label><strong id="m-speed">—</strong></div></div>
-<div class="layout"><section class="panel map-panel"><div class="panel-head"><span>◎ GLOBAL RADAR / LIVE POSITIONS</span><span id="clock">UTC --:--:--</span></div><div class="map-shell"><div id="map"></div><div class="scan"></div><div class="sweep"></div><div class="map-label">● SURVEILLANCE ACTIVE &nbsp; / &nbsp; DATA REFRESH 3 SEC</div></div></section>
+<div class="layout"><section class="panel map-panel"><div class="panel-head"><span>◎ GLOBAL RADAR / LIVE POSITIONS</span><span style="display:flex;align-items:center;gap:8px"><button id="map-mode-toggle" type="button" onclick="toggleRadarMode()">🌐 ГЛОБУС</button><span id="clock">UTC --:--:--</span></span></div><div class="map-shell"><div id="map"></div><div class="scan"></div><div class="sweep"></div><div class="map-label">● SURVEILLANCE ACTIVE &nbsp; / &nbsp; DATA REFRESH 3 SEC</div></div></section>
 <aside class="side"><section class="panel"><div class="panel-head"><span>ACTIVE TRAFFIC</span><span id="flight-count">00</span></div><div class="list" id="flights"><div class="empty">Подключаемся к сети ATC…</div></div></section>
 <section class="panel"><div class="panel-head"><span>FLIGHT DATA</span><span id="callsign">NO SELECTION</span></div><div class="details"><div class="detail"><label>PILOT</label><strong id="d-pilot">—</strong></div><div class="detail"><label>AIRCRAFT</label><strong id="d-aircraft">—</strong></div><div class="detail"><label>ALTITUDE</label><strong id="d-alt">—</strong></div><div class="detail"><label>SPEED</label><strong id="d-speed">—</strong></div><div class="detail"><label>HEADING</label><strong id="d-heading">—</strong></div><div class="detail"><label>POSITION</label><strong id="d-position">—</strong></div><div class="detail"><label>DEPARTURE</label><strong id="d-origin">—</strong></div><div class="detail"><label>DESTINATION</label><strong id="d-dest">—</strong></div></div><div class="actions"><button id="watch" disabled>▶ LIVE OBSERVER</button><button id="center" disabled>◎ CENTER RADAR</button></div></section></aside></div>
 </main>
@@ -29,6 +29,23 @@ function num(v,d=0){v=Number(v);return Number.isFinite(v)?v:d}
 function fmt(v,d=0){return num(v).toLocaleString('en-US',{maximumFractionDigits:d})}
 function aircraftName(id){return ({'airbus-a320':'Airbus A320','boeing-747':'Boeing 747','airbus-a380':'Airbus A380','cessna-172':'Cessna 172','business-jet':'Business Jet'})[id]||id||'Unknown aircraft'}
 async function initMap(){const cfg=await fetch('/api/atc/cesium-token').then(r=>r.ok?r.json():({token:''})).catch(()=>({token:''}));if(cfg.token)Cesium.Ion.defaultAccessToken=cfg.token;map=new Cesium.Viewer('map',{animation:false,timeline:false,geocoder:false,homeButton:false,sceneModePicker:false,baseLayerPicker:false,baseLayer:false,navigationHelpButton:false,infoBox:false,selectionIndicator:false,shouldAnimate:true,terrainProvider:new Cesium.EllipsoidTerrainProvider()});map.imageryLayers.removeAll();try{if(cfg.token){map.terrainProvider=await Cesium.CesiumTerrainProvider.fromIonAssetId(1,{requestVertexNormals:true,requestWaterMask:true});map.imageryLayers.addImageryProvider(await Cesium.IonImageryProvider.fromAssetId(2))}else{map.imageryLayers.addImageryProvider(await Cesium.ArcGisMapServerImageryProvider.fromUrl('https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer'));try{map.terrainProvider=await Cesium.ArcGISTiledElevationTerrainProvider.fromUrl('https://elevation3d.arcgis.com/arcgis/rest/services/WorldElevation3D/Terrain3D/ImageServer')}catch(e){console.warn('Terrain fallback unavailable',e)}}}catch(e){console.error('ATC Cesium layers failed',e);map.imageryLayers.addImageryProvider(await Cesium.ArcGisMapServerImageryProvider.fromUrl('https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer'))}map.scene.globe.enableLighting=true;map.camera.setView({destination:Cesium.Cartesian3.fromDegrees(0,15,22000000)});}
+let radarMode='globe';
+function toggleRadarMode(){
+ if(!map)return;
+ radarMode=radarMode==='globe'?'terrain':'globe';
+ const button=document.getElementById('map-mode-toggle');
+ if(button)button.textContent=radarMode==='globe'?'🌐 ГЛОБУС':'⛰ ОБЪЁМНАЯ КАРТА';
+ const destination=selected?flights.find(f=>f.user_id===selected):null;
+ const position=destination?Cesium.Cartesian3.fromDegrees(num(destination.lon),num(destination.lat),Math.max(250000,num(destination.altitude)*12)):Cesium.Cartesian3.fromDegrees(0,15,22000000);
+ map.scene.morphTo3D(0);
+ if(radarMode==='terrain'){
+  map.scene.morphToColumbusView(1.0);
+  map.camera.flyTo({destination:Cesium.Cartesian3.fromDegrees(destination?num(destination.lon):0,destination?num(destination.lat):15, destination?Math.max(150000,num(destination.altitude)*10):12000000),duration:1.1});
+ }else{
+  map.scene.morphTo3D(1.0);
+  map.camera.flyTo({destination,duration:1.1});
+ }
+}
 function coords(f){return [num(f.lat),num(f.lon)]}
 function refreshMarkers(){
  const seen=new Set();
