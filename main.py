@@ -1,4 +1,4 @@
-import os, time, secrets, hashlib
+import os, time, secrets, hashlib, json
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 import bcrypt, httpx, jwt
@@ -206,5 +206,18 @@ async def ws_flight(ws:WebSocket):
     await ws.accept(); sockets.add(ws)
     try:
         await ws.send_json({'type':'players','players':list(live.values())})
-        while True: await ws.receive_text()
+        while True:
+            raw=await ws.receive_text()
+            try: message=json.loads(raw)
+            except (ValueError,TypeError): continue
+            if message.get('type')=='voice':
+                audio=message.get('audio','')
+                if not isinstance(audio,str) or not audio.startswith('data:audio/') or len(audio)>700000: continue
+                payload={'type':'voice','username':str(message.get('username','Pilot'))[:24],'audio':audio}
+                stale=[]
+                for peer in list(sockets):
+                    if peer is ws: continue
+                    try: await peer.send_json(payload)
+                    except Exception: stale.append(peer)
+                for peer in stale: sockets.discard(peer)
     except (WebSocketDisconnect,Exception): sockets.discard(ws)
