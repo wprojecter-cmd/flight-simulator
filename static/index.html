@@ -110,6 +110,9 @@
       <button id="terrain-source" class="terrain-source" type="button">TERRAIN: ARCGIS (NO TOKEN)</button>
       <button id="cesium-token-create" class="cesium-token-create" type="button">GET CESIUM TOKEN</button>
       <button id="camera-mode" class="camera-mode" type="button">CAMERA: DRAG TO ROTATE</button>
+      <div class="flight-tools-bar"><button id="time-toggle" type="button">◷ TIME</button><button id="voice-toggle" type="button">🎙 VOICE CHAT</button></div>
+      <section id="time-panel" class="floating-tool hidden"><header id="time-panel-head"><b>TIME OF DAY</b><button type="button" onclick="document.getElementById('time-panel').classList.add('hidden')">×</button></header><div class="tool-body"><div id="time-value">--:--</div><input id="time-slider" type="range" min="0" max="1439" step="5" value="720"><div class="time-labels"><span>00:00</span><span>12:00</span><span>23:59</span></div><p>Drag the slider to move the sun and change daylight.</p></div></section>
+      <section id="voice-panel" class="floating-tool voice-tool hidden"><header id="voice-panel-head"><b>VOICE CHAT</b><button type="button" onclick="document.getElementById('voice-panel').classList.add('hidden');document.getElementById('voice-toggle').classList.remove('active');">×</button></header><div class="tool-body"><button id="voice-mic" type="button" aria-label="Hold to record voice message">🎙</button><p id="voice-status">Hold the microphone to talk</p><small>Only pilots with this panel open will hear you.</small></div></section>
       <div class="flight-stats">
         <div>ALTITUDE<b id="altitude">1,000 FT</b></div>
         <div>AIRSPEED<b id="speed">120 KTS</b></div>
