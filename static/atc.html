@@ -64,7 +64,7 @@ async function initMap(){
  map.scene.morphToColumbusView(0);
  map.camera.setView({destination:Cesium.Cartesian3.fromDegrees(0,15,12000000)});
  const button=document.getElementById('map-mode-toggle');
- if(button)button.textContent='⛰ ОБЪЁМНАЯ КАРТА';
+ if(button){button.textContent='⛰ ОБЪЁМНАЯ КАРТА';button.onclick=toggleRadarMode;}
  window.addEventListener('resize',()=>{if(map&&!map.isDestroyed()){map.resize();map.scene.requestRender()}});
 }
 let radarMode='terrain';
