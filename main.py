@@ -201,7 +201,7 @@ async def weather(lat:float,lon:float,authorization:Optional[str]=Header(default
     if not data:
         # Weather is optional; return a safe unavailable state rather than breaking the flight UI.
         print('Weather provider unavailable after retries:',last_error)
-        return {'available':False,'message':'Weather provider is temporarily unavailable.','current':{},'hourly':{}}
+        return {'available':False,'message':'Weather provider is temporarily unavailable.','description':'Weather unavailable','timezone':None,'time':now().isoformat(),'temperature_c':None,'wind_speed_ms':None,'clouds_percent':None,'cloud_low_percent':0,'cloud_mid_percent':0,'cloud_high_percent':0,'rain_mm':0,'snowfall_cm':0,'precipitation_mm':0,'weather_code':0}
     cur=data.get('current') or {}; hourly=data.get('hourly') or {}; times=hourly.get('time') or []
     idx=0
     if cur.get('time') and times:
@@ -211,7 +211,7 @@ async def weather(lat:float,lon:float,authorization:Optional[str]=Header(default
         return values[idx] if idx<len(values) else None
     code=cur.get('weather_code',0)
     descriptions={0:'Clear',1:'Mainly clear',2:'Partly cloudy',3:'Overcast',45:'Fog',48:'Rime fog',51:'Light drizzle',53:'Drizzle',55:'Dense drizzle',61:'Light rain',63:'Rain',65:'Heavy rain',71:'Light snow',73:'Snow',75:'Heavy snow',80:'Rain showers',81:'Rain showers',82:'Heavy rain showers',95:'Thunderstorm',96:'Thunderstorm with hail',99:'Thunderstorm with hail'}
-    return {'available':True,'latitude':lat,'longitude':lon,'current':cur,'hourly':hourly,'low_cloud':at('cloud_cover_low'),'mid_cloud':at('cloud_cover_mid'),'high_cloud':at('cloud_cover_high'),'description':descriptions.get(code,'Weather'),'updated_at':now().isoformat()}
+    return {'available':True,'latitude':lat,'longitude':lon,'timezone':d.get('timezone'),'time':cur.get('time') or now().isoformat(),'temperature_c':cur.get('temperature_2m'),'apparent_temperature_c':cur.get('apparent_temperature'),'humidity_percent':cur.get('relative_humidity_2m'),'wind_speed_ms':round(float(cur.get('wind_speed_10m') or 0)/3.6,1),'wind_direction_deg':cur.get('wind_direction_10m'),'clouds_percent':cur.get('cloud_cover'),'cloud_low_percent':at('cloud_cover_low') or 0,'cloud_mid_percent':at('cloud_cover_mid') or 0,'cloud_high_percent':at('cloud_cover_high') or 0,'rain_mm':cur.get('rain') or cur.get('showers') or 0,'snowfall_cm':cur.get('snowfall') or 0,'precipitation_mm':cur.get('precipitation') or 0,'weather_code':code,'description':descriptions.get(code,'Weather')}
 
 @app.websocket('/ws/flight')
 async def ws_flight(ws:WebSocket):
