@@ -60,8 +60,8 @@ class Auth(BaseModel):
 class AircraftChoice(BaseModel): aircraft_id: str
 class Position(BaseModel):
     lat: float=Field(ge=-90,le=90); lon: float=Field(ge=-180,le=180)
-    altitude: float=Field(default=1000,ge=0,le=60000); heading: float=Field(default=0,ge=0,le=360)
-    speed: float=Field(default=120,ge=0,le=1500)
+    altitude: float=Field(default=1000,ge=0,le=200000); heading: float=Field(default=0,ge=0,le=360)
+    speed: float=Field(default=120,ge=0,le=10000)
     aircraft_id: str='airbus-a320'
     origin_lat: Optional[float]=Field(default=None,ge=-90,le=90)
     origin_lon: Optional[float]=Field(default=None,ge=-180,le=180)
@@ -262,16 +262,24 @@ async def roblox_avatar_model(authorization:Optional[str]=Header(default=None)):
         async with httpx.AsyncClient(timeout=18,headers={'User-Agent':'FlightSimOnline/1.0'}) as c:
             response=await c.get(f'https://avatar.roblox.com/v1/users/{int(roblox_id)}/avatar-3d')
             if response.status_code!=200:
-                raise HTTPException(502,'Roblox could not provide a 3D avatar right now.')
-            avatar=response.json()
+                print('Roblox avatar-3d failed:',response.status_code,response.text[:300])
+                raise HTTPException(502,'Roblox avatar service returned HTTP '+str(response.status_code)+'. Please retry later.')
+            try:
+                avatar=response.json()
+            except ValueError:
+                print('Roblox avatar-3d returned non-JSON:',response.text[:300])
+                raise HTTPException(502,'Roblox avatar service returned an invalid response.')
             obj_url=avatar.get('obj')
             if not obj_url:
-                raise HTTPException(502,'Roblox did not return a 3D avatar model.')
+                print('Roblox avatar-3d response omitted OBJ URL:',str(avatar)[:500])
+                raise HTTPException(502,'Roblox did not provide a downloadable 3D avatar for this account.')
             obj_response=await c.get(obj_url)
             if obj_response.status_code!=200 or not obj_response.text.strip():
+                print('Roblox avatar OBJ download failed:',obj_response.status_code,obj_response.text[:300])
                 raise HTTPException(502,'Could not download the Roblox 3D avatar model.')
             return {'obj':obj_response.text,'username':p.get('roblox_username'),'user_id':int(roblox_id)}
-    except httpx.HTTPError:
+    except httpx.HTTPError as exc:
+        print('Roblox avatar network error:',repr(exc))
         raise HTTPException(502,'Could not connect to Roblox avatar services.')
 
 @app.put('/api/profile/aircraft')
