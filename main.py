@@ -99,11 +99,11 @@ async def login(data:Auth):
     need_db(); email=str(data.email).lower().strip(); u=await db.users.find_one({'email_lower':email})
     if not u or not bcrypt.checkpw(data.password.encode(),u['password_hash'].encode()): raise HTTPException(401,'Email or password is incorrect.')
     token,exp=await make_session(str(u['_id'])); p=await db.profiles.find_one({'user_id':str(u['_id'])}) or {}
-    return {'token':token,'expires_at':exp.isoformat(),'user':{'id':str(u['_id']),'email':u['email'],'username':u['username']},'profile':{'selected_aircraft':p.get('selected_aircraft','airbus-a320')}}
+    return {'token':token,'expires_at':exp.isoformat(),'user':{'id':str(u['_id']),'email':u['email'],'username':u['username']},'profile':{'selected_aircraft':p.get('selected_aircraft','airbus-a320'),'roblox_username':p.get('roblox_username'),'roblox_display_name':p.get('roblox_display_name'),'roblox_user_id':p.get('roblox_user_id')}}
 @app.get('/api/auth/me')
 async def me(authorization:Optional[str]=Header(default=None)):
     u,_=await get_user(authorization); p=await db.profiles.find_one({'user_id':str(u['_id'])}) or {}
-    return {'user':{'id':str(u['_id']),'email':u['email'],'username':u['username']},'profile':{'selected_aircraft':p.get('selected_aircraft','airbus-a320'),'last_route':p.get('last_route')}}
+    return {'user':{'id':str(u['_id']),'email':u['email'],'username':u['username']},'profile':{'selected_aircraft':p.get('selected_aircraft','airbus-a320'),'last_route':p.get('last_route'),'roblox_username':p.get('roblox_username'),'roblox_display_name':p.get('roblox_display_name'),'roblox_user_id':p.get('roblox_user_id')}}
 @app.post('/api/auth/logout')
 async def logout(authorization:Optional[str]=Header(default=None)):
     u,t=await get_user(authorization); await db.sessions.delete_one({'user_id':str(u['_id']),'token_hash':hashlib.sha256(t.encode()).hexdigest()}); return {'ok':True}
@@ -140,6 +140,137 @@ async def create_cesium_token(authorization:Optional[str]=Header(default=None)):
         raise HTTPException(502,'Cesium ion response did not contain a token. Check Render logs.')
     await db.profiles.update_one({'user_id':uid},{'$set':{'cesium_ion_token':issued,'cesium_ion_token_id':result.get('id'),'cesium_ion_token_created_at':now(),'updated_at':now()}},upsert=True)
     return {'ok':True,'token':issued,'created':True}
+class RobloxLink(BaseModel):
+    username: str=Field(min_length=3,max_length=20,pattern=r'^[A-Za-z0-9_]+
+    u,_=await get_user(authorization)
+    if data.aircraft_id not in {'airbus-a320','cessna-172','business-jet','boeing-747','airbus-a380','darkstar'}: raise HTTPException(400,'Unknown aircraft.')
+    await db.profiles.update_one({'user_id':str(u['_id'])},{'$set':{'selected_aircraft':data.aircraft_id,'updated_at':now()}},upsert=True)
+    return {'ok':True,'selected_aircraft':data.aircraft_id}
+async def broadcast():
+    stale=[]; msg={'type':'players','players':list(live.values())}
+    for ws in list(sockets):
+        try: await ws.send_json(msg)
+        except Exception: stale.append(ws)
+    for ws in stale: sockets.discard(ws)
+@app.post('/api/flight/position')
+async def position(data:Position,authorization:Optional[str]=Header(default=None)):
+    u,_=await get_user(authorization); uid=str(u['_id']); stamp=now(); point={'lat':data.lat,'lon':data.lon,'altitude':data.altitude,'heading':data.heading,'speed':data.speed,'at':stamp.isoformat()}
+    doc={'user_id':uid,'username':u['username'],**data.model_dump(),'updated_at':stamp}
+    await db.flight_positions.update_one({'user_id':uid},{'$set':doc,'$push':{'track':{'$each':[point],'$slice':-1200}}},upsert=True)
+    live[uid]={**doc,'track':(live.get(uid,{}).get('track',[])+[point])[-1200:],'updated_at':stamp.isoformat()}; await broadcast(); return {'ok':True}
+@app.get('/api/atc/flights')
+async def atc_flights(authorization:Optional[str]=Header(default=None)):
+    await get_user(authorization)
+    cur=db.flight_positions.find({'updated_at':{'$gt':now()-timedelta(seconds=30)}},{'_id':0})
+    out=[]
+    async for p in cur:
+        if p.get('updated_at'): p['updated_at']=p['updated_at'].isoformat()
+        out.append(p)
+    return {'flights':out,'server_time':now().isoformat()}
+@app.get('/api/flight/players')
+async def players(authorization:Optional[str]=Header(default=None)):
+    await get_user(authorization); cur=db.flight_positions.find({'updated_at':{'$gt':now()-timedelta(seconds=30)}},{'_id':0}); out=[]
+    async for p in cur:
+        if p.get('updated_at'): p['updated_at']=p['updated_at'].isoformat()
+        out.append(p)
+    return {'players':out}
+@app.get('/api/weather')
+async def weather(lat:float,lon:float,authorization:Optional[str]=Header(default=None)):
+    await get_user(authorization)
+    if not -90 <= lat <= 90 or not -180 <= lon <= 180: raise HTTPException(400,'Invalid coordinates.')
+    params={'latitude':lat,'longitude':lon,'current':'temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,rain,showers,snowfall,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m','hourly':'cloud_cover_low,cloud_cover_mid,cloud_cover_high','forecast_days':1,'timezone':'auto'}
+    async with httpx.AsyncClient(timeout=18) as c:
+        r=await c.get('https://api.open-meteo.com/v1/forecast',params=params)
+        if r.status_code!=200:
+            print('Open-Meteo detailed weather request failed:',r.status_code,r.text[:300])
+            fallback_params={'latitude':lat,'longitude':lon,'current':'temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,rain,showers,snowfall,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m','hourly':'cloud_cover_low,cloud_cover_mid,cloud_cover_high','forecast_days':1,'timezone':'auto','models':'best_match'}
+            r=await c.get('https://api.open-meteo.com/v1/forecast',params=fallback_params)
+    if r.status_code!=200:
+        print('Open-Meteo weather fallback failed:',r.status_code,r.text[:500])
+        raise HTTPException(502,'Weather provider is temporarily unavailable. Please retry in a moment.')
+    try: d=r.json()
+    except ValueError: raise HTTPException(502,'Weather provider returned invalid data.')
+    cur=d.get('current') or {}; hourly=d.get('hourly') or {}; times=hourly.get('time') or []
+    idx=0
+    if cur.get('time') and times:
+        idx=min(range(len(times)),key=lambda i:abs((times[i][:13])-(cur['time'][:13]))) if len(times)>0 else 0
+    def at(name):
+        values=hourly.get(name) or []
+        return values[idx] if idx<len(values) else None
+    code=cur.get('weather_code',0)
+    descriptions={0:'Clear',1:'Mainly clear',2:'Partly cloudy',3:'Overcast',45:'Fog',48:'Rime fog',51:'Light drizzle',53:'Drizzle',55:'Dense drizzle',61:'Light rain',63:'Rain',65:'Heavy rain',71:'Light snow',73:'Snow',75:'Heavy snow',80:'Rain showers',81:'Rain showers',82:'Heavy rain showers',95:'Thunderstorm',96:'Thunderstorm with hail',99:'Severe thunderstorm'}
+    return {'temperature_c':cur.get('temperature_2m'),'apparent_temperature_c':cur.get('apparent_temperature'),'wind_speed_ms':round((cur.get('wind_speed_10m') or 0)/3.6,1),'wind_direction_deg':cur.get('wind_direction_10m'),'humidity':cur.get('relative_humidity_2m'),'description':descriptions.get(code,'Variable conditions'),'weather_code':code,'clouds_percent':cur.get('cloud_cover',0),'cloud_low_percent':at('cloud_cover_low') or 0,'cloud_mid_percent':at('cloud_cover_mid') or 0,'cloud_high_percent':at('cloud_cover_high') or 0,'rain_mm':cur.get('rain',0) or cur.get('showers',0) or 0,'snowfall_cm':cur.get('snowfall',0) or 0,'precipitation_mm':cur.get('precipitation',0) or 0,'time':cur.get('time'),'timezone':d.get('timezone','UTC'),'source':'Open-Meteo'}
+
+@app.websocket('/ws/flight')
+async def ws_flight(ws:WebSocket):
+    await ws.accept(); sockets.add(ws)
+    try:
+        await ws.send_json({'type':'players','players':list(live.values())})
+        while True:
+            raw=await ws.receive_text()
+            try: message=json.loads(raw)
+            except (ValueError,TypeError): continue
+            if message.get('type')=='voice':
+                audio=message.get('audio','')
+                if not isinstance(audio,str) or not audio.startswith('data:audio/') or len(audio)>700000: continue
+                payload={'type':'voice','username':str(message.get('username','Pilot'))[:24],'audio':audio}
+                stale=[]
+                for peer in list(sockets):
+                    if peer is ws: continue
+                    try: await peer.send_json(payload)
+                    except Exception: stale.append(peer)
+                for peer in stale: sockets.discard(peer)
+    except (WebSocketDisconnect,Exception): sockets.discard(ws)
+)
+
+@app.put('/api/profile/roblox')
+async def link_roblox(data:RobloxLink,authorization:Optional[str]=Header(default=None)):
+    u,_=await get_user(authorization)
+    username=data.username.strip()
+    try:
+        async with httpx.AsyncClient(timeout=12,headers={'User-Agent':'FlightSimOnline/1.0'}) as c:
+            response=await c.post('https://users.roblox.com/v1/usernames/users',json={'usernames':[username],'excludeBannedUsers':False})
+    except httpx.HTTPError:
+        raise HTTPException(502,'Could not connect to Roblox. Please try again.')
+    if response.status_code!=200:
+        raise HTTPException(502,'Roblox could not verify this username right now.')
+    matches=response.json().get('data') or []
+    if not matches:
+        raise HTTPException(404,'Roblox username was not found. Check the spelling and try again.')
+    roblox=matches[0]
+    uid=str(u['_id'])
+    await db.profiles.update_one({'user_id':uid},{'$set':{'roblox_username':roblox.get('name',username),'roblox_display_name':roblox.get('displayName',roblox.get('name',username)),'roblox_user_id':int(roblox['id']),'updated_at':now()}},upsert=True)
+    return {'ok':True,'roblox':{'username':roblox.get('name',username),'display_name':roblox.get('displayName',roblox.get('name',username)),'user_id':int(roblox['id'])}}
+
+@app.delete('/api/profile/roblox')
+async def unlink_roblox(authorization:Optional[str]=Header(default=None)):
+    u,_=await get_user(authorization)
+    await db.profiles.update_one({'user_id':str(u['_id'])},{'$unset':{'roblox_username':'','roblox_display_name':'','roblox_user_id':''},'$set':{'updated_at':now()}})
+    return {'ok':True}
+
+@app.get('/api/roblox/avatar-model')
+async def roblox_avatar_model(authorization:Optional[str]=Header(default=None)):
+    u,_=await get_user(authorization)
+    p=await db.profiles.find_one({'user_id':str(u['_id'])}) or {}
+    roblox_id=p.get('roblox_user_id')
+    if not roblox_id:
+        raise HTTPException(404,'Connect a Roblox account first.')
+    try:
+        async with httpx.AsyncClient(timeout=18,headers={'User-Agent':'FlightSimOnline/1.0'}) as c:
+            response=await c.get(f'https://avatar.roblox.com/v1/users/{int(roblox_id)}/avatar-3d')
+            if response.status_code!=200:
+                raise HTTPException(502,'Roblox could not provide a 3D avatar right now.')
+            avatar=response.json()
+            obj_url=avatar.get('obj')
+            if not obj_url:
+                raise HTTPException(502,'Roblox did not return a 3D avatar model.')
+            obj_response=await c.get(obj_url)
+            if obj_response.status_code!=200 or not obj_response.text.strip():
+                raise HTTPException(502,'Could not download the Roblox 3D avatar model.')
+            return {'obj':obj_response.text,'username':p.get('roblox_username'),'user_id':int(roblox_id)}
+    except httpx.HTTPError:
+        raise HTTPException(502,'Could not connect to Roblox avatar services.')
+
 @app.put('/api/profile/aircraft')
 async def aircraft(data:AircraftChoice,authorization:Optional[str]=Header(default=None)):
     u,_=await get_user(authorization)
