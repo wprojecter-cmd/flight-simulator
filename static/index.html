@@ -56,6 +56,10 @@
         <button class="tile" data-view="multiplayer"><div class="art network">◎</div><small>04 / MULTIPLAYER</small><h2>Multiplayer</h2><p>Check the skies and fly alongside other pilots.</p><b>JOIN NETWORK ↗</b></button>
         <button class="tile atc-tile" data-view="atc"><div class="art atc-art"><span>◉</span><i></i></div><small>05 / AIR TRAFFIC CONTROL</small><h2>World radar</h2><p>Track live pilots, routes and flight telemetry.</p><b>OPEN ATC RADAR ↗</b></button>
       </div>
+      <section class="roblox-connect-panel">
+        <div class="roblox-connect-copy"><small>PLAYER IDENTITY</small><h2>Connect Roblox</h2><p>Save your Roblox username to your pilot profile and use your avatar in Human Mode.</p><div id="roblox-link-status" class="roblox-link-status">No Roblox account connected</div></div>
+        <form id="roblox-link-form" class="roblox-link-form"><label for="roblox-username">Roblox username</label><div class="roblox-link-row"><input id="roblox-username" name="roblox-username" minlength="3" maxlength="20" pattern="[A-Za-z0-9_]+" placeholder="Enter exact username" autocomplete="off" required><button class="primary" type="submit" id="roblox-link-submit">CONNECT ACCOUNT ↗</button></div><button class="roblox-unlink" id="roblox-unlink" type="button">Disconnect Roblox</button><small>Username lookup is verified with Roblox. No Roblox password is requested.</small></form>
+      </section>
       <footer>FLIGHTSIM ONLINE © 2026 <span>BUILT FOR THE LOVE OF FLIGHT</span><span>VERSION 0.1.0</span></footer>
     </main>
 
@@ -111,6 +115,7 @@
       <button id="terrain-source" class="terrain-source" type="button">TERRAIN: ARCGIS (NO TOKEN)</button>
       <button id="cesium-token-create" class="cesium-token-create" type="button">GET CESIUM TOKEN</button>
       <button id="camera-mode" class="camera-mode" type="button">CAMERA: DRAG TO ROTATE</button>
+      <div class="human-mode-bar"><button id="human-mode-toggle" type="button">HUMAN MODE</button><button id="aircraft-mode-toggle" class="hidden" type="button">RETURN TO AIRCRAFT</button><span id="human-mode-hint">WASD to walk · mouse to look</span></div>
       <div class="flight-tools-bar"><button id="time-toggle" type="button">◷ TIME</button><button id="voice-toggle" type="button">🎙 VOICE CHAT</button></div>
       <section id="time-panel" class="floating-tool hidden"><header id="time-panel-head"><b>TIME OF DAY</b><button type="button" onclick="document.getElementById('time-panel').classList.add('hidden')">×</button></header><div class="tool-body"><div id="time-value">--:--</div><input id="time-slider" type="range" min="0" max="1439" step="5" value="720"><div class="time-labels"><span>00:00</span><span>12:00</span><span>23:59</span></div><p>Drag the slider to move the sun and change daylight.</p></div></section>
       <section id="voice-panel" class="floating-tool voice-tool hidden"><header id="voice-panel-head"><b>VOICE CHAT</b><button type="button" onclick="document.getElementById('voice-panel').classList.add('hidden');document.getElementById('voice-toggle').classList.remove('active');">×</button></header><div class="tool-body"><button id="voice-mic" type="button" aria-label="Hold to record voice message">🎙</button><p id="voice-status">Hold the microphone to talk</p><small>Only pilots with this panel open will hear you.</small></div></section>
@@ -156,6 +161,7 @@
   <!-- Keep all three.js scripts on the same version for legacy global APIs. -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
   <script>window.CESIUM_BASE_URL="https://cesium.com/downloads/cesiumjs/releases/1.125/Build/Cesium/";</script>
   <link rel="stylesheet" href="https://cesium.com/downloads/cesiumjs/releases/1.125/Build/Cesium/Widgets/widgets.css">
