@@ -143,7 +143,7 @@ async def create_cesium_token(authorization:Optional[str]=Header(default=None)):
 @app.put('/api/profile/aircraft')
 async def aircraft(data:AircraftChoice,authorization:Optional[str]=Header(default=None)):
     u,_=await get_user(authorization)
-    if data.aircraft_id not in {'airbus-a320','cessna-172','business-jet','boeing-747','airbus-a380'}: raise HTTPException(400,'Unknown aircraft.')
+    if data.aircraft_id not in {'airbus-a320','cessna-172','business-jet','boeing-747','airbus-a380','darkstar'}: raise HTTPException(400,'Unknown aircraft.')
     await db.profiles.update_one({'user_id':str(u['_id'])},{'$set':{'selected_aircraft':data.aircraft_id,'updated_at':now()}},upsert=True)
     return {'ok':True,'selected_aircraft':data.aircraft_id}
 async def broadcast():
