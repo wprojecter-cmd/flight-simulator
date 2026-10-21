@@ -141,7 +141,10 @@ async def create_cesium_token(authorization:Optional[str]=Header(default=None)):
     await db.profiles.update_one({'user_id':uid},{'$set':{'cesium_ion_token':issued,'cesium_ion_token_id':result.get('id'),'cesium_ion_token_created_at':now(),'updated_at':now()}},upsert=True)
     return {'ok':True,'token':issued,'created':True}
 class RobloxLink(BaseModel):
-    username: str=Field(min_length=3,max_length=20,pattern=r'^[A-Za-z0-9_]+
+    username: str=Field(min_length=3,max_length=20)
+
+@app.put('/api/profile/aircraft')
+async def aircraft(data:AircraftChoice,authorization:Optional[str]=Header(default=None)):
     u,_=await get_user(authorization)
     if data.aircraft_id not in {'airbus-a320','cessna-172','business-jet','boeing-747','airbus-a380','darkstar'}: raise HTTPException(400,'Unknown aircraft.')
     await db.profiles.update_one({'user_id':str(u['_id'])},{'$set':{'selected_aircraft':data.aircraft_id,'updated_at':now()}},upsert=True)
