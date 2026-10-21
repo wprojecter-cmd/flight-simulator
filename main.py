@@ -230,6 +230,7 @@ async def ws_flight(ws:WebSocket):
 async def link_roblox(data:RobloxLink,authorization:Optional[str]=Header(default=None)):
     u,_=await get_user(authorization)
     username=data.username.strip()
+    if not username.isascii() or not username.replace('_','').isalnum(): raise HTTPException(400,'Roblox usernames may contain only letters, numbers and underscores.')
     try:
         async with httpx.AsyncClient(timeout=12,headers={'User-Agent':'FlightSimOnline/1.0'}) as c:
             response=await c.post('https://users.roblox.com/v1/usernames/users',json={'usernames':[username],'excludeBannedUsers':False})
