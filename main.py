@@ -224,7 +224,6 @@ async def ws_flight(ws:WebSocket):
                     except Exception: stale.append(peer)
                 for peer in stale: sockets.discard(peer)
     except (WebSocketDisconnect,Exception): sockets.discard(ws)
-)
 
 @app.put('/api/profile/roblox')
 async def link_roblox(data:RobloxLink,authorization:Optional[str]=Header(default=None)):
