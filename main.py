@@ -1,4 +1,4 @@
-import os, time, secrets, hashlib, json
+import os, time, secrets, hashlib, json, asyncio, io, zipfile
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 import bcrypt, httpx, jwt
@@ -12,7 +12,7 @@ from pymongo import ASCENDING
 
 ROOT=os.path.dirname(os.path.abspath(__file__))
 URI=os.getenv('MONGODB_URI',''); DBNAME=os.getenv('MONGODB_DB','flight_simulator')
-SECRET=os.getenv('SESSION_SECRET',''); WEATHER_KEY=os.getenv('OPENWEATHER_API_KEY',''); CESIUM_ION_MANAGEMENT_TOKEN=os.getenv('CESIUM_ION_MANAGEMENT_TOKEN','').strip()
+SECRET=os.getenv('SESSION_SECRET',''); WEATHER_KEY=os.getenv('OPENWEATHER_API_KEY',''); CESIUM_ION_MANAGEMENT_TOKEN=os.getenv('CESIUM_ION_MANAGEMENT_TOKEN','').strip(); ROBLOX_API_KEY=os.getenv('ROBLOX_API_KEY','').strip()
 app=FastAPI(title='Flight Simulator Online',version='0.1.0')
 app.mount('/static',StaticFiles(directory=os.path.join(ROOT,'static')),name='static')
 client=None; db=None; sockets=set(); live={}
@@ -258,26 +258,50 @@ async def roblox_avatar_model(authorization:Optional[str]=Header(default=None)):
     roblox_id=p.get('roblox_user_id')
     if not roblox_id:
         raise HTTPException(404,'Connect a Roblox account first.')
+    if not ROBLOX_API_KEY:
+        raise HTTPException(503,'Roblox 3D avatar access requires ROBLOX_API_KEY. Create a Roblox Open Cloud API key with Thumbnails: Read and add it to Render environment variables.')
+    headers={'User-Agent':'FlightSimOnline/1.0','x-api-key':ROBLOX_API_KEY,'Accept':'application/json'}
     try:
-        async with httpx.AsyncClient(timeout=18,headers={'User-Agent':'FlightSimOnline/1.0'}) as c:
-            response=await c.get(f'https://avatar.roblox.com/v1/users/{int(roblox_id)}/avatar-3d')
-            if response.status_code!=200:
-                print('Roblox avatar-3d failed:',response.status_code,response.text[:300])
-                raise HTTPException(502,'Roblox avatar service returned HTTP '+str(response.status_code)+'. Please retry later.')
+        async with httpx.AsyncClient(timeout=25,headers=headers,follow_redirects=True) as c:
+            avatar_data=None
+            for attempt in range(4):
+                response=await c.get('https://thumbnails.roblox.com/v1/users/avatar-3d',params={'userId':int(roblox_id)})
+                if response.status_code!=200:
+                    print('Roblox 3D thumbnail API failed:',response.status_code,response.text[:300])
+                    if response.status_code in (401,403):
+                        raise HTTPException(502,'Roblox rejected ROBLOX_API_KEY. Check that the key has Thumbnails: Read permission.')
+                    raise HTTPException(502,'Roblox 3D thumbnail API returned HTTP '+str(response.status_code)+'.')
+                try:
+                    payload=response.json()
+                except ValueError:
+                    raise HTTPException(502,'Roblox 3D thumbnail API returned invalid JSON.')
+                entries=payload.get('data') or []
+                if entries and entries[0].get('state')=='Completed' and entries[0].get('imageUrl'):
+                    avatar_data=entries[0]
+                    break
+                state=entries[0].get('state','Unknown') if entries else 'NoData'
+                print('Roblox 3D avatar thumbnail state:',state,'attempt:',attempt+1,'user:',roblox_id)
+                if state not in ('Pending','InReview','Unknown') or attempt==3:
+                    break
+                await asyncio.sleep(1)
+            if not avatar_data:
+                raise HTTPException(502,'Roblox has not generated a 3D avatar for this account yet. Try again in a minute.')
+            model_response=await c.get(avatar_data['imageUrl'])
+            if model_response.status_code!=200 or not model_response.content:
+                print('Roblox 3D avatar archive download failed:',model_response.status_code)
+                raise HTTPException(502,'Could not download the Roblox 3D avatar archive.')
             try:
-                avatar=response.json()
-            except ValueError:
-                print('Roblox avatar-3d returned non-JSON:',response.text[:300])
-                raise HTTPException(502,'Roblox avatar service returned an invalid response.')
-            obj_url=avatar.get('obj')
-            if not obj_url:
-                print('Roblox avatar-3d response omitted OBJ URL:',str(avatar)[:500])
-                raise HTTPException(502,'Roblox did not provide a downloadable 3D avatar for this account.')
-            obj_response=await c.get(obj_url)
-            if obj_response.status_code!=200 or not obj_response.text.strip():
-                print('Roblox avatar OBJ download failed:',obj_response.status_code,obj_response.text[:300])
-                raise HTTPException(502,'Could not download the Roblox 3D avatar model.')
-            return {'obj':obj_response.text,'username':p.get('roblox_username'),'user_id':int(roblox_id)}
+                with zipfile.ZipFile(io.BytesIO(model_response.content)) as archive:
+                    obj_names=[name for name in archive.namelist() if name.lower().endswith('.obj') and not name.startswith('__MACOSX/')]
+                    if not obj_names:
+                        raise HTTPException(502,'Roblox avatar archive contains no OBJ model.')
+                    obj_text=archive.read(obj_names[0]).decode('utf-8',errors='replace')
+            except zipfile.BadZipFile:
+                # Some responses may provide the OBJ text directly.
+                obj_text=model_response.content.decode('utf-8',errors='replace')
+                if not obj_text.lstrip().startswith('#') and '\nv ' not in '\n'+obj_text and not obj_text.lstrip().startswith('v '):
+                    raise HTTPException(502,'Roblox returned an unrecognized 3D avatar file.')
+            return {'obj':obj_text,'username':p.get('roblox_username'),'user_id':int(roblox_id)}
     except httpx.HTTPError as exc:
         print('Roblox avatar network error:',repr(exc))
         raise HTTPException(502,'Could not connect to Roblox avatar services.')
