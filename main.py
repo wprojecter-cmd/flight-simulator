@@ -182,18 +182,27 @@ async def weather(lat:float,lon:float,authorization:Optional[str]=Header(default
     await get_user(authorization)
     if not -90 <= lat <= 90 or not -180 <= lon <= 180: raise HTTPException(400,'Invalid coordinates.')
     params={'latitude':lat,'longitude':lon,'current':'temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,rain,showers,snowfall,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m','hourly':'cloud_cover_low,cloud_cover_mid,cloud_cover_high','forecast_days':1,'timezone':'auto'}
-    async with httpx.AsyncClient(timeout=18) as c:
-        r=await c.get('https://api.open-meteo.com/v1/forecast',params=params)
-        if r.status_code!=200:
-            print('Open-Meteo detailed weather request failed:',r.status_code,r.text[:300])
-            fallback_params={'latitude':lat,'longitude':lon,'current':'temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,rain,showers,snowfall,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m','hourly':'cloud_cover_low,cloud_cover_mid,cloud_cover_high','forecast_days':1,'timezone':'auto','models':'best_match'}
-            r=await c.get('https://api.open-meteo.com/v1/forecast',params=fallback_params)
-    if r.status_code!=200:
-        print('Open-Meteo weather fallback failed:',r.status_code,r.text[:500])
-        raise HTTPException(502,'Weather provider is temporarily unavailable. Please retry in a moment.')
-    try: d=r.json()
-    except ValueError: raise HTTPException(502,'Weather provider returned invalid data.')
-    cur=d.get('current') or {}; hourly=d.get('hourly') or {}; times=hourly.get('time') or []
+    data=None; last_error=None
+    async with httpx.AsyncClient(timeout=14,follow_redirects=True,headers={'User-Agent':'FlightSimOnline/1.0'}) as c:
+        for host in ('https://api.open-meteo.com/v1/forecast','https://api.open-meteo.com/v1/forecast'):
+            for attempt in range(2):
+                try:
+                    r=await c.get(host,params=params)
+                    if r.status_code==200:
+                        data=r.json()
+                        break
+                    last_error=f'HTTP {r.status_code}: {r.text[:250]}'
+                    print('Open-Meteo weather request failed:',last_error,'attempt:',attempt+1)
+                except (httpx.HTTPError,ValueError) as exc:
+                    last_error=str(exc)
+                    print('Open-Meteo weather network/JSON failure:',repr(exc),'attempt:',attempt+1)
+                if attempt==0: await asyncio.sleep(.7)
+            if data: break
+    if not data:
+        # Weather is optional; return a safe unavailable state rather than breaking the flight UI.
+        print('Weather provider unavailable after retries:',last_error)
+        return {'available':False,'message':'Weather provider is temporarily unavailable.','current':{},'hourly':{}}
+    cur=data.get('current') or {}; hourly=data.get('hourly') or {}; times=hourly.get('time') or []
     idx=0
     if cur.get('time') and times:
         idx=min(range(len(times)),key=lambda i:abs((times[i][:13])-(cur['time'][:13]))) if len(times)>0 else 0
@@ -201,8 +210,8 @@ async def weather(lat:float,lon:float,authorization:Optional[str]=Header(default
         values=hourly.get(name) or []
         return values[idx] if idx<len(values) else None
     code=cur.get('weather_code',0)
-    descriptions={0:'Clear',1:'Mainly clear',2:'Partly cloudy',3:'Overcast',45:'Fog',48:'Rime fog',51:'Light drizzle',53:'Drizzle',55:'Dense drizzle',61:'Light rain',63:'Rain',65:'Heavy rain',71:'Light snow',73:'Snow',75:'Heavy snow',80:'Rain showers',81:'Rain showers',82:'Heavy rain showers',95:'Thunderstorm',96:'Thunderstorm with hail',99:'Severe thunderstorm'}
-    return {'temperature_c':cur.get('temperature_2m'),'apparent_temperature_c':cur.get('apparent_temperature'),'wind_speed_ms':round((cur.get('wind_speed_10m') or 0)/3.6,1),'wind_direction_deg':cur.get('wind_direction_10m'),'humidity':cur.get('relative_humidity_2m'),'description':descriptions.get(code,'Variable conditions'),'weather_code':code,'clouds_percent':cur.get('cloud_cover',0),'cloud_low_percent':at('cloud_cover_low') or 0,'cloud_mid_percent':at('cloud_cover_mid') or 0,'cloud_high_percent':at('cloud_cover_high') or 0,'rain_mm':cur.get('rain',0) or cur.get('showers',0) or 0,'snowfall_cm':cur.get('snowfall',0) or 0,'precipitation_mm':cur.get('precipitation',0) or 0,'time':cur.get('time'),'timezone':d.get('timezone','UTC'),'source':'Open-Meteo'}
+    descriptions={0:'Clear',1:'Mainly clear',2:'Partly cloudy',3:'Overcast',45:'Fog',48:'Rime fog',51:'Light drizzle',53:'Drizzle',55:'Dense drizzle',61:'Light rain',63:'Rain',65:'Heavy rain',71:'Light snow',73:'Snow',75:'Heavy snow',80:'Rain showers',81:'Rain showers',82:'Heavy rain showers',95:'Thunderstorm',96:'Thunderstorm with hail',99:'Thunderstorm with hail'}
+    return {'available':True,'latitude':lat,'longitude':lon,'current':cur,'hourly':hourly,'low_cloud':at('cloud_cover_low'),'mid_cloud':at('cloud_cover_mid'),'high_cloud':at('cloud_cover_high'),'description':descriptions.get(code,'Weather'),'updated_at':now().isoformat()}
 
 @app.websocket('/ws/flight')
 async def ws_flight(ws:WebSocket):
